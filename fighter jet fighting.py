@@ -8,7 +8,7 @@ pygame.init()
 # Set up display
 WIDTH, HEIGHT = 600, 400
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("bhosde ka rocket")
+pygame.display.set_caption("fighter jet")
 
 # Set up assets
 player_img = pygame.image.load("player.png.png")
