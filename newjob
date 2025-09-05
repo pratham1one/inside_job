@@ -1,0 +1,101 @@
+import speech_recognition as sr
+import pyttsx3
+import subprocess
+import pyautogui
+import time
+
+# =============================
+# ASSISTANT INITIAL SETUP
+# =============================
+
+# Text-to-speech engine
+engine = pyttsx3.init()
+
+def speak(text: str):
+    """Make the assistant speak."""
+    print(f"Assistant: {text}")
+    engine.say(text)
+    engine.runAndWait()
+
+def take_command() -> str:
+    """Listen for a voice command and return it as text."""
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening...")
+        r.pause_threshold = 1
+        audio = r.listen(source)
+
+    try:
+        print("Recognizing...")
+        query = r.recognize_google(audio, language="en-in")
+        print(f"You said: {query}")
+    except Exception:
+        speak("Sorry, I didn’t catch that. Please say it again.")
+        return "none"
+    return query.lower()
+
+# =============================
+# APPLICATION MANAGEMENT
+# =============================
+
+# Add your application paths here
+app_paths = {
+    "notepad": "notepad.exe",
+    "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    "vs code": r"C:\Users\YourUsername\AppData\Local\Programs\Microsoft VS Code\Code.exe",
+    "calculator": "calc.exe",
+}
+
+def open_application(app_name: str):
+    """Open an application if it exists in app_paths."""
+    for key in app_paths:
+        if key in app_name:
+            try:
+                subprocess.Popen(app_paths[key])
+                speak(f"Opening {key}")
+                return
+            except Exception as e:
+                speak(f"Failed to open {key}")
+                print(e)
+                return
+    speak("Sorry, I don’t know how to open " + app_name)
+
+# =============================
+# TYPING FUNCTION
+# =============================
+
+def type_text(text: str):
+    """Type text wherever the cursor is focused."""
+    speak("Typing your text in 2 seconds, be ready.")
+    time.sleep(2)
+    pyautogui.typewrite(text, interval=0.05)
+
+# =============================
+# MAIN PROGRAM LOOP
+# =============================
+
+if __name__ == "__main__":
+    speak("Hello! I am your assistant. How can I help you?")
+    while True:
+        command = take_command()
+
+        if command == "none":
+            continue
+
+        elif "open" in command:
+            app = command.replace("open", "").strip()
+            open_application(app)
+
+        elif "type" in command:
+            text = command.replace("type", "").strip()
+            if text:
+                type_text(text)
+            else:
+                speak("Please say what you want me to type.")
+
+        elif "exit" in command or "quit" in command or "stop" in command:
+            speak("Goodbye! Have a nice day.")
+            break
+
+        else:
+            speak("You said " + command)

@@ -1,124 +1,170 @@
 import pygame
-import random
 import sys
+import random
 
+# Initialize Pygame
 pygame.init()
 
-# --- Game Constants ---
+#colour
+red = 200
+blue = 150
+# Screen setup
 WIDTH, HEIGHT = 400, 600
-GAP = 160  # Gap between pipes
-GRAVITY = 0.5
-JUMP = -8
-SPEED = 3
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+game_font = pygame.font.Font(None, 40)
 
-# --- Setup Screen ---
-SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Flappy Bird")
+# Load your own images (replace with your files)
+background = pygame.image.load("background.png").convert()
+bird_img = pygame.image.load("bird.png").convert_alpha()
+enemy_img = pygame.image.load("enemy.png").convert_alpha()
+pipe_img = pygame.image.load("pipe.png").convert_alpha()
 
-# --- Load Assets ---
-BIRD = pygame.image.load("assets/bird.png").convert_alpha()
-PIPE = pygame.image.load("assets/pipe.png").convert_alpha()
-BASE = pygame.image.load("assets/base.png").convert_alpha()
-BG = pygame.image.load("assets/background.png").convert()
+# Scale images (optional)
+background = pygame.transform.scale(background, (WIDTH, HEIGHT))
+bird_img = pygame.transform.scale(bird_img, (60, 30))
+enemy_img = pygame.transform.scale(enemy_img, (60, 40))
+pipe_img = pygame.transform.scale(pipe_img, (70, 400))
 
-FONT = pygame.font.SysFont("Arial", 32)
-CLOCK = pygame.time.Clock()
+# Game variables
+gravity = 0.25
+bird_movement = 0
+game_active = True
+score = 0
+high_score = 0
 
-# --- Utility Functions ---
-def draw_text(text, size, x, y, color=(255, 255, 255), center=False):
-    font = pygame.font.SysFont("Arial", size)
-    label = font.render(text, True, color)
-    if center:
-        rect = label.get_rect(center=(x, y))
-        SCREEN.blit(label, rect)
-    else:
-        SCREEN.blit(label, (x, y))
+# Bird setup
+bird_rect = bird_img.get_rect(center=(100, HEIGHT // 2))
+
+# Enemy setup
+enemy_list = []
+SPAWNENEMY = pygame.USEREVENT
+pygame.time.set_timer(SPAWNENEMY, 2000)  # enemy every 2 sec
+
+# Pipe setup (only lower pipes)
+pipe_list = []
+SPAWNPIPE = pygame.USEREVENT + 1
+pygame.time.set_timer(SPAWNPIPE, 2500)  # pipe every 2.5 sec
+
+def draw_background():
+    screen.blit(background, (0, 0))
+
+def draw_bird():
+    screen.blit(bird_img, bird_rect)
+
+def create_enemy():
+    y_pos = random.randint(100, HEIGHT - 100)
+    enemy = enemy_img.get_rect(midleft=(WIDTH + 50, y_pos))
+    return enemy
+
+def move_enemies(enemies):
+    for e in enemies:
+        e.centerx -= 5
+    return [e for e in enemies if e.right > 0]
+
+def draw_enemies(enemies):
+    for e in enemies:
+        screen.blit(enemy_img, e)
 
 def create_pipe():
-    height = random.randint(150, 400)
-    bottom_pipe = PIPE.get_rect(midtop=(WIDTH + 100, height + GAP // 2))
-    top_pipe = PIPE.get_rect(midbottom=(WIDTH + 100, height - GAP // 2))
-    return top_pipe, bottom_pipe
+    y_pos = random.randint(300, HEIGHT - 50)
+    pipe = pipe_img.get_rect(midtop=(WIDTH + 50, y_pos))
+    return pipe
 
-def draw_base(base_x):
-    SCREEN.blit(BASE, (base_x, HEIGHT - BASE.get_height()))
-    SCREEN.blit(BASE, (base_x + WIDTH, HEIGHT - BASE.get_height()))
+def move_pipes(pipes):
+    for p in pipes:
+        p.centerx -= 4
+    return [p for p in pipes if p.right > 0]
 
-def check_collision(bird_rect, pipes):
-    for top_pipe, bottom_pipe in pipes:
-        if bird_rect.colliderect(top_pipe) or bird_rect.colliderect(bottom_pipe):
-            return True
-    if bird_rect.top <= 0 or bird_rect.bottom >= HEIGHT - BASE.get_height():
-        return True
-    return False
+def draw_pipes(pipes):
+    for p in pipes:
+        screen.blit(pipe_img, p)
 
-# --- Main Game ---
-def main_game():
-    bird_rect = BIRD.get_rect(center=(50, HEIGHT // 2))
-    bird_movement = 0
+def check_collision(enemies, pipes):
+    # Enemy collision
+    for e in enemies:
+        if bird_rect.colliderect(e):
+            return False
+    # Pipe collision
+    for p in pipes:
+        if bird_rect.colliderect(p):
+            return False
+    # Ground / sky
+    if bird_rect.top <= 0 or bird_rect.bottom >= HEIGHT:
+        return False
+    return True
 
-    base_x = 0
-    pipes = []
-    score = 0
+def display_score(state):
+    if state == "main_game":
+        score_surface = game_font.render(f"Score: {int(score)}", True, (255, 255, 255))
+        score_rect = score_surface.get_rect(center=(WIDTH//2, 50))
+        screen.blit(score_surface, score_rect)
+    if state == "game_over":
+        score_surface = game_font.render(f"Score: {int(score)}", True, (255, 255, 255))
+        score_rect = score_surface.get_rect(center=(WIDTH//2, 50))
+        screen.blit(score_surface, score_rect)
 
-    SPAWNPIPE = pygame.USEREVENT
-    pygame.time.set_timer(SPAWNPIPE, 1200)
-    pipes.append(create_pipe())
+        high_score_surface = game_font.render(f"High Score: {int(high_score)}", True, (0, 0 ))
+        high_score_rect = high_score_surface.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+        screen.blit(high_score_surface, high_score_rect)
 
-    running = True
-    while running:
-        # --- Events ---
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                bird_movement = JUMP
-            if event.type == SPAWNPIPE:
-                pipes.append(create_pipe())
-
-        # --- Bird Movement ---
-        bird_movement += GRAVITY
-        bird_rect.centery += int(bird_movement)
-
-        # --- Pipe Movement ---
-        new_pipes = []
-        for top_pipe, bottom_pipe in pipes:
-            top_pipe.centerx -= SPEED
-            bottom_pipe.centerx -= SPEED
-            if top_pipe.right > 0:
-                new_pipes.append((top_pipe, bottom_pipe))
-        pipes = new_pipes
-
-        # --- Drawing ---
-        SCREEN.blit(BG, (0, 0))
-
-        for top_pipe, bottom_pipe in pipes:
-            SCREEN.blit(pygame.transform.flip(PIPE, False, True), top_pipe)
-            SCREEN.blit(PIPE, bottom_pipe)
-
-        SCREEN.blit(BIRD, bird_rect)
-
-        # --- Base ---
-        base_x -= SPEED
-        if base_x <= -WIDTH:
-            base_x = 0
-        draw_base(base_x)
-
-        # --- Score ---
-        for top_pipe, bottom_pipe in pipes:
-            if top_pipe.centerx == bird_rect.centerx:
-                score += 1
-        draw_text(f"Score: {score}", 24, 10, 10)
-
-        # --- Collision ---
-        if check_collision(bird_rect, pipes):
-            return score
-
-        pygame.display.update()
-        CLOCK.tick(60)
-
-# --- Game Loop ---
+# Main Game Loop
 while True:
-    final_score = main_game()
-    print(f"Game Over! Final Score: {final_score}")
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and game_active:
+                bird_movement = 0
+                bird_movement -= 7
+            if event.key == pygame.K_SPACE and not game_active:
+                game_active = True
+                enemy_list.clear()
+                pipe_list.clear()
+                bird_rect.center = (100, HEIGHT // 2)
+                bird_movement = 0
+                score = 0
+
+        if event.type == SPAWNENEMY:
+            enemy_list.append(create_enemy())
+
+        if event.type == SPAWNPIPE:
+            pipe_list.append(create_pipe())
+
+    draw_background()
+
+    if game_active:
+        # Bird
+        bird_movement += gravity
+        bird_rect.centery += bird_movement
+        draw_bird()
+
+        # Enemies
+        enemy_list = move_enemies(enemy_list)
+        draw_enemies(enemy_list)
+
+        # Pipes
+        pipe_list = move_pipes(pipe_list)
+        draw_pipes(pipe_list)
+
+        # Collision
+        game_active = check_collision(enemy_list, pipe_list)
+
+        # Score (add when enemies/pipes pass left of bird)
+        for enemy in enemy_list:
+            if enemy.centerx == bird_rect.centerx:
+                score += 1
+        for pipe in pipe_list:
+            if pipe.centerx == bird_rect.centerx:
+                score += 1
+
+        display_score("main_game")
+
+    else:
+        high_score = max(high_score, score)
+        display_score("game_over")
+
+    pygame.display.update()
+    clock.tick(60)
